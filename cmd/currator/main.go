@@ -3,15 +3,11 @@ package main
 import (
 	"fmt"
 	"log"
-	"net/url"
 	"os"
 
 	"github.com/alecthomas/kong"
-	"github.com/emersion/go-imap"
-	"github.com/emersion/go-imap/client"
-	"github.com/thedustin/go-email-curator/filter"
-	"github.com/thedustin/go-email-curator/filter/action"
-	"github.com/thedustin/go-email-curator/filter/criteria"
+	"github.com/thedustin/go-email-curator/cmd/currator/cmd"
+	"github.com/thedustin/go-email-curator/cmd/currator/currate"
 )
 
 var (
@@ -20,13 +16,9 @@ var (
 	Version      = "0.0.0"
 )
 
-type MailServerCmd struct {
-	MailServer   *url.URL `required arg:"" env:"CURRATOR_MAIL_SERVER"`
-	MailUsername string   `help:"" env:"CURRATOR_MAIL_USERNAME"`
-	MailPassword string   `help:"" env:"CURRATOR_MAIL_PASSWORD"`
-}
-
 var cli struct {
+	Currate currate.CurrateCmd `cmd:""`
+
 	Debug   bool `help:"Enables debug mode and increases logging"`
 	Version bool `help:"Display the application version" short:"V"`
 }
@@ -34,7 +26,7 @@ var cli struct {
 func main() {
 	logger := log.New(os.Stderr, "", log.LstdFlags|log.Lmicroseconds)
 
-	kong.Parse(&cli)
+	ctx := kong.Parse(&cli)
 
 	if cli.Debug {
 		logger.Printf("Cli parameters: %+v", cli)
@@ -45,7 +37,10 @@ func main() {
 		return
 	}
 
-	log.Println("Done!")
+	err := ctx.Run(&cmd.Context{
+		Debug:  cli.Debug,
+		Logger: logger,
+	})
 
-	criteria.NewAnd()
+	ctx.FatalIfErrorf(err)
 }
