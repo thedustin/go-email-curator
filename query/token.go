@@ -2,6 +2,21 @@ package query
 
 import "strings"
 
+type tokenType string
+
+const (
+	TokenStart      tokenType = "^"
+	TokenGroupStart tokenType = "("
+	TokenGroupEnd   tokenType = ")"
+	TokenField      tokenType = "%field%"
+	TokenEqual      tokenType = ":"
+	TokenFieldValue tokenType = "%value%"
+	TokenFulltext   tokenType = "%fulltext%"
+	TokenNegate     tokenType = "-"
+	TokenEnd        tokenType = "$"
+	TokenOr         tokenType = "OR"
+)
+
 var trailingSpaceTokenTypes = map[tokenType]bool{
 	TokenFulltext:   true,
 	TokenFieldValue: true,

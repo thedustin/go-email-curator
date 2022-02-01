@@ -8,22 +8,7 @@ import (
 // See https://marianogappa.github.io/software/2019/06/05/lets-build-a-sql-parser-in-go/
 // See https://www.youtube.com/watch?v=HxaD_trXwRE
 
-type tokenType string
-
-const (
-	TokenStart      tokenType = "^"
-	TokenGroupStart tokenType = "("
-	TokenGroupEnd   tokenType = ")"
-	TokenField      tokenType = "%field%"
-	TokenEqual      tokenType = ":"
-	TokenFieldValue tokenType = "%value%"
-	TokenFulltext   tokenType = "%fulltext%"
-	TokenNegate     tokenType = "-"
-	TokenEnd        tokenType = "$"
-	TokenOr         tokenType = "OR"
-)
-
-var allowedFields = map[string]bool{
+var knownFields = map[string]bool{
 	"from":       true,
 	"has":        true,
 	"in":         true,
@@ -110,7 +95,7 @@ func (p *Parser) processToken(t string) error {
 
 		return nil
 	default:
-		if _, ok := allowedFields[t]; ok {
+		if _, ok := knownFields[t]; ok {
 			p.lastTokenType = TokenField
 			p.tokens = append(p.tokens, Token{TokenField, t})
 
@@ -192,7 +177,7 @@ func (p *Parser) peek() (string, int) {
 		return ":", 1
 	}
 
-	for field := range allowedFields {
+	for field := range knownFields {
 		to := min(len(p.source), p.i+len(field))
 		t := strings.ToLower(p.source[p.i:to])
 
