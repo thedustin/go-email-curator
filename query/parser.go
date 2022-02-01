@@ -20,6 +20,18 @@ var knownFields = map[string]bool{
 	"to":         true,
 }
 
+var tokenValidationMap = map[tokenType][]tokenType{
+	TokenStart: {TokenField, TokenFulltext, TokenNegate, TokenGroupStart, TokenEnd},
+
+	TokenField: {TokenEqual},
+	TokenEqual: {TokenFieldValue},
+
+	TokenNegate: {TokenGroupStart, TokenField, TokenFulltext},
+	TokenOr:     {TokenField, TokenFulltext, TokenNegate, TokenGroupStart},
+
+	TokenGroupStart: {TokenField, TokenFulltext, TokenNegate},
+}
+
 type Parser struct {
 	source string
 	tokens TokenList
@@ -42,6 +54,7 @@ func (p *Parser) Result() TokenList {
 func (p *Parser) Reset() {
 	p.source = ""
 	p.tokens = nil
+	p.tokens = append(p.tokens, NewToken(TokenStart, string(TokenStart)))
 
 	p.lastTokenType = TokenStart
 	p.i = 0
@@ -62,11 +75,58 @@ func (p *Parser) Parse(query string) error {
 		p.pop()
 	}
 
+	p.tokens = append(p.tokens, NewToken(TokenEnd, string(TokenEnd)))
+
 	if p.subGroup > 0 {
-		return fmt.Errorf("consumed all tokens but still has open sub groups")
+		p.tokens = nil
+
+		return ErrGroupNotClosed
+	}
+
+	err := p.validate()
+
+	if err != nil {
+		p.tokens = nil
+
+		return err
 	}
 
 	return nil
+}
+
+func (p *Parser) validate() error {
+	for i, t := range p.tokens {
+		if t.kind == TokenEnd {
+			break
+		}
+
+		vTokens, ok := tokenValidationMap[t.kind]
+
+		if !ok {
+			// no requirements mean we are fine
+			continue
+		}
+
+		if !tokenTypeInList(p.tokens[i+1].kind, vTokens) {
+			return ValidationError{
+				token:    t.kind,
+				next:     p.tokens[i+1].kind,
+				expected: vTokens,
+			}
+		}
+	}
+
+	return nil
+}
+
+func tokenTypeInList(t tokenType, vTokens []tokenType) bool {
+	for _, vT := range vTokens {
+		if t == vT {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (p *Parser) processToken(t string) error {
