@@ -12,13 +12,13 @@ var (
 	seenFlag     = []interface{}{imap.SeenFlag}
 )
 
-type ActionMarkAsRead struct{}
+type ActionSeen struct{}
 
-func NewMarkAsRead() ActionMarkAsRead {
-	return ActionMarkAsRead{}
+func NewSeenAction() ActionSeen {
+	return ActionSeen{}
 }
 
-func (a ActionMarkAsRead) Perform(msg *imap.Message, c *client.Client) error {
+func (a ActionSeen) Perform(msg *imap.Message, c *client.Client) error {
 	seqset := new(imap.SeqSet)
 	seqset.AddNum(msg.Uid)
 

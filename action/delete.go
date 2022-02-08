@@ -14,8 +14,8 @@ var (
 
 type ActionDelete struct{}
 
-func NewDelete() ActionDelete {
-	return ActionDelete{}
+func NewDelete() Action {
+	return NewMove("Papierkorb")
 }
 
 func (a ActionDelete) Perform(msg *imap.Message, c *client.Client) error {

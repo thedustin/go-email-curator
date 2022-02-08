@@ -7,11 +7,6 @@ import (
 	"os"
 
 	"github.com/alecthomas/kong"
-	"github.com/emersion/go-imap"
-	"github.com/emersion/go-imap/client"
-	"github.com/thedustin/go-email-curator/filter"
-	"github.com/thedustin/go-email-curator/filter/action"
-	"github.com/thedustin/go-email-curator/filter/criteria"
 )
 
 var (
@@ -44,8 +39,4 @@ func main() {
 		fmt.Printf("%s v%s\n", ReadableName, Version)
 		return
 	}
-
-	log.Println("Done!")
-
-	criteria.NewAnd()
 }

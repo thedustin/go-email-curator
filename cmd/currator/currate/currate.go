@@ -6,9 +6,10 @@ import (
 	"github.com/emersion/go-imap"
 	"github.com/emersion/go-imap/client"
 	"github.com/thedustin/go-email-curator/cmd/currator/cmd"
+	"github.com/thedustin/go-email-curator/config"
 	"github.com/thedustin/go-email-curator/filter"
-	"github.com/thedustin/go-email-curator/filter/action"
-	"github.com/thedustin/go-email-curator/filter/criteria"
+	parser "github.com/thedustin/go-gmail-query-parser"
+	"github.com/thedustin/go-gmail-query-parser/criteria"
 )
 
 type MailServerCmd struct {
@@ -21,11 +22,51 @@ type CurrateCmd struct {
 	MailServerCmd
 }
 
+var section imap.BodySectionName = func() imap.BodySectionName {
+	var section imap.BodySectionName
+
+	section.Specifier = imap.TextSpecifier
+	section.Peek = true
+
+	return section
+}()
+
 func (cmd *CurrateCmd) Run(ctx *cmd.Context) error {
+	config.Get().Server = cmd.MailServer
+	config.Get().Username = cmd.MailUsername
+	config.Get().Password = cmd.MailPassword
+
+	err := config.Get().FromYamlFile("./config.yaml")
+
+	if err != nil {
+		return err
+	}
+
+	ctx.Logger.Println("Create filter...")
+
+	parser := parser.NewParser(
+		criteria.ValueTransformer(messageTransformer),
+		parser.FlagDefault,
+	)
+
+	filters := make([]*filter.Filter, len(config.Get().Filters))
+
+	for i, c := range config.Get().Filters {
+		f, err := filter.NewFromConfig(parser, c)
+
+		if err != nil {
+			return err
+		}
+
+		filters[i] = f
+	}
+
+	ctx.Logger.Println("Filter created")
+
 	ctx.Logger.Println("Connecting to server...")
 
 	// Connect to server
-	c, err := client.DialTLS(cmd.MailServer.String(), nil)
+	c, err := client.DialTLS(config.Get().Server.String(), nil)
 	if err != nil {
 		ctx.Logger.Fatal(err)
 	}
@@ -35,7 +76,7 @@ func (cmd *CurrateCmd) Run(ctx *cmd.Context) error {
 	defer c.Logout()
 
 	// Login
-	if err := c.Login(cmd.MailUsername, cmd.MailPassword); err != nil {
+	if err := c.Login(config.Get().Username, config.Get().Password); err != nil {
 		ctx.Logger.Fatal(err)
 	}
 	ctx.Logger.Println("Logged in")
@@ -63,39 +104,40 @@ func (cmd *CurrateCmd) Run(ctx *cmd.Context) error {
 	}
 	ctx.Logger.Println("Flags for INBOX:", mbox.Flags)
 
+	msgCnt := 250
+
 	// Get the last 4 messages
 	from := uint32(1)
 	to := mbox.Messages
-	if mbox.Messages > 3 {
+	if mbox.Messages > uint32(msgCnt) {
 		// We're using unsigned integers here, only subtract if the result is > 0
-		from = mbox.Messages - 3
+		from = mbox.Messages - uint32(msgCnt-1)
 	}
 	seqset := new(imap.SeqSet)
 	seqset.AddRange(from, to)
 
-	messages := make(chan *imap.Message, 10)
+	items := []imap.FetchItem{imap.FetchEnvelope, imap.FetchUid}
+
+	messages := make(chan *imap.Message, msgCnt)
 	done = make(chan error, 1)
 	go func() {
-		done <- c.Fetch(seqset, []imap.FetchItem{imap.FetchEnvelope}, messages)
+		done <- c.Fetch(seqset, items, messages)
 	}()
 
-	filters := []filter.Filter{
-		filter.NewFilter(
-			criteria.NewSubject("Gorillas?"),
-			action.NewDelete(),
-		),
+	rMessages := make([]*imap.Message, msgCnt)
+
+	i := 1
+	for msg := range messages {
+		rMessages[msgCnt-i] = msg
+		i++
 	}
 
-	ctx.Logger.Println("Last 4 messages:")
-	for msg := range messages {
-		ctx.Logger.Printf("* %s\n", msg.Envelope.Subject)
+	ctx.Logger.Println("Last", msgCnt, "messages:")
+	for _, msg := range rMessages {
+		ctx.Logger.Printf("* [%d] %s\n", msg.Uid, msg.Envelope.Subject)
 
 		for _, f := range filters {
-			err := f.Execute(msg, c)
-
-			if err != nil {
-				ctx.Logger.Fatal(err)
-			}
+			f.Perform(msg, c)
 		}
 	}
 
